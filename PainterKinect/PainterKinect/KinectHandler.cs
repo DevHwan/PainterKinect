@@ -9,7 +9,7 @@ using System.Windows;
 
 namespace PainterKinect
 {
-	class KinectHandler
+	public class KinectHandler
 	{
 		// Target Kinect Sensor
 		private KinectSensor sensor;
@@ -20,8 +20,8 @@ namespace PainterKinect
 		private byte[] depthColorPixels;
 
 		// Bitmap Container
-		private WriteableBitmap colorBitmap;
-		private WriteableBitmap depthBitmap;
+		public WriteableBitmap colorBitmap;
+		public WriteableBitmap depthBitmap;
 
 
 
@@ -126,7 +126,7 @@ namespace PainterKinect
 
 					// Get Reliable Min Max Value
 					int minDepth = depthFrame.MinDepth;
-					int maxDepth = depthFrame.MaxDepth;
+					int maxDepth = 2000;// depthFrame.MaxDepth;
 
 					// Convert Depth to RGB
 					int colorPixelIndex = 0;
@@ -137,7 +137,8 @@ namespace PainterKinect
 
 						// Convert Intensity To Byte
 						// TODO Make A lookup Table for Performance
-						byte intensity = (byte)( depthValue >= minDepth && depthValue <= maxDepth ? depthValue : 0 );
+						depthValue = (short)( depthValue >= minDepth && depthValue <= maxDepth ? depthValue : 0 );
+						byte intensity = (byte)( depthValue * 255 / ( maxDepth - minDepth ) );
 
 						// BGR
 						this.depthColorPixels[colorPixelIndex++] = intensity;

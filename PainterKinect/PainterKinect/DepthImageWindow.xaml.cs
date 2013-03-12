@@ -18,9 +18,17 @@ namespace PainterKinect
 	/// </summary>
 	public partial class DepthImageWindow : Window
 	{
-		public DepthImageWindow()
+		private KinectHandler kinectHandler;
+
+		public DepthImageWindow( KinectHandler kinectHandler )
 		{
 			InitializeComponent();
+			this.kinectHandler = kinectHandler;
+		}
+
+		private void OnMainWindowLoaded( object sender, RoutedEventArgs e )
+		{
+			this.DepthImageControl.Source = this.kinectHandler.depthBitmap;
 		}
 	}
 }

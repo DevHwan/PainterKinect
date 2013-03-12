@@ -18,9 +18,18 @@ namespace PainterKinect
 	/// </summary>
 	public partial class ColorWindow : Window
 	{
-		public ColorWindow()
+		private KinectHandler kinectHandler;
+
+		public ColorWindow( KinectHandler kinectHandler )
 		{
 			InitializeComponent();
+			this.kinectHandler = kinectHandler;
+		}
+
+		private void OnMainWindowLoaded( object sender, RoutedEventArgs e )
+		{
+			// Set Bitmap
+			this.ColorImageControl.Source = this.kinectHandler.colorBitmap;
 		}
 	}
 }
