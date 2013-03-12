@@ -11,6 +11,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Microsoft.Kinect;
 
 namespace PainterKinect
 {
@@ -19,10 +20,30 @@ namespace PainterKinect
 	/// </summary>
 	public partial class MainWindow : Window
 	{
+		private KinectHandler kinectHandler;
+
 		public MainWindow()
 		{
 			InitializeComponent();
 
+			// Set Kinect Handler
+			this.kinectHandler = new KinectHandler();
+
+			// Initialize Kinect
+			if ( this.kinectHandler.InitializeKinectSensor() != KinectStatus.Connected )
+			{
+				// Close Window
+				this.Close();
+			}
+		}
+
+		private void OnClosing( object sender, System.ComponentModel.CancelEventArgs e )
+		{
+			this.kinectHandler.DestroyKinect();
+		}
+
+		private void OnLoaded( object sender, RoutedEventArgs e )
+		{
 		}
 	}
 }
