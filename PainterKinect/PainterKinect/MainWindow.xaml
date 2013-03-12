@@ -1,7 +1,7 @@
 ﻿<Window x:Class="PainterKinect.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="PainterKinect" Height="350" Width="525" Closing="OnClosing" Loaded="OnLoaded">
+        Title="PainterKinect" Height="350" Width="525" Closing="OnClosing" Loaded="OnLoaded" ResizeMode="NoResize" WindowStyle="None" WindowState="Maximized" WindowStartupLocation="CenterScreen">
     <Grid>
         
     </Grid>

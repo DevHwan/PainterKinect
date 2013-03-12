@@ -24,7 +24,11 @@ namespace PainterKinect
 
 		public MainWindow()
 		{
+			// Initialize Components
 			InitializeComponent();
+
+			// Initialize Logging Module
+			Logging.InitializeLogging();
 
 			// Set Kinect Handler
 			this.kinectHandler = new KinectHandler();
@@ -35,15 +39,30 @@ namespace PainterKinect
 				// Close Window
 				this.Close();
 			}
+
+			// Create Color Window
+			ColorWindow colorWindow = new ColorWindow();
+			colorWindow.Show();
+
+			// Create Depth Window
+			DepthImageWindow depthWindow = new DepthImageWindow();
+			depthWindow.Show();
+
+			// Log
+			Logging.PrintLog( "MainWindow", "Program Initialized!" );
 		}
 
 		private void OnClosing( object sender, System.ComponentModel.CancelEventArgs e )
 		{
+			// Destroy Kinect
 			this.kinectHandler.DestroyKinect();
+			// Destroy Logging Module
+			Logging.CloseLogging();
 		}
 
 		private void OnLoaded( object sender, RoutedEventArgs e )
 		{
+
 		}
 	}
 }

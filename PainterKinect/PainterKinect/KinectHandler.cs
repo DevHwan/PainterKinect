@@ -84,7 +84,7 @@ namespace PainterKinect
 					// Set Return Value
 					retVal = KinectStatus.Error;
 					// Print Error Message
-					Console.WriteLine( ex.ToString() );
+					Logging.PrintErrorLog( "InitializeKinectSensor", "Failed To Start Kinect Device!!" );
 				}
 			}
 
