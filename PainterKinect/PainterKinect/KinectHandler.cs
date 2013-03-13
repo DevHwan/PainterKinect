@@ -27,6 +27,18 @@ namespace PainterKinect
 		// Skeleton Container
 		public Skeleton[] skeletons;
 
+		// Joints
+		private Joint leftHand;
+		private Joint rightHand;
+
+		// ColorCoordinate Position
+		ColorImagePoint leftHandPoint;
+		ColorImagePoint rightHandPoint;
+
+		// Image Position
+		CvPoint leftHandPosition;
+		CvPoint rightHandPosition;
+
 
 		public KinectHandler()
 		{
@@ -92,7 +104,7 @@ namespace PainterKinect
 					// Set Return Value
 					retVal = KinectStatus.Error;
 					// Print Error Message
-					Logging.PrintErrorLog( "InitializeKinectSensor", "Failed To Start Kinect Device!!" );
+					Logging.PrintErrorLog( "InitializeKinectSensor", "Failed To Start Kinect Device!! - " + ex.ToString() );
 				}
 			}
 
@@ -118,10 +130,61 @@ namespace PainterKinect
 					// Copy Pixel Data
 					colorFrame.CopyPixelDataTo( this.colorPixels );
 
+
+					// Grab Color Image To Mat
+					using ( CvMat img = new CvMat( this.colorBitmap.PixelHeight, this.colorBitmap.PixelWidth, MatrixType.U8C4, this.colorPixels ) )
+					{
+						// To Reduce Noise
+						Cv.Smooth( img, img, SmoothType.Gaussian );
+
+						// Draw Skeleton Position
+						if ( skeletons != null )
+						{
+							// Find Appropriate Skeleton
+							Skeleton targetSkeleton = null;
+							for ( int i = 0 ; i < skeletons.Length ; i++ )
+							{
+								// Skip Invalid State
+								if ( skeletons[i] == null )
+									continue;
+
+								// Only Fully Tracked Skeleton
+								if ( skeletons[i].TrackingState == SkeletonTrackingState.Tracked )
+								{
+									// Set Target Skeleton - If exists Set to nearest.
+									if ( targetSkeleton == null )
+										targetSkeleton = skeletons[i];
+									else if ( targetSkeleton.Position.Z > skeletons[i].Position.Z )
+										targetSkeleton = skeletons[i];
+								}
+							}
+							if ( targetSkeleton != null )
+							{
+								// Left Hand Position
+								this.leftHand = targetSkeleton.Joints[JointType.HandLeft];
+								// Check Tracked Status
+								if ( this.leftHand.TrackingState == JointTrackingState.Tracked )
+								{
+									leftHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( leftHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
+									this.leftHandPosition.X = leftHandPoint.X;
+									this.leftHandPosition.Y = leftHandPoint.Y;
+									Cv.Circle( img, leftHandPosition, 10, new CvScalar( 0, 0, 255 ), -1 );
+								}
+
+								// Right Hand Position
+								this.rightHand = targetSkeleton.Joints[JointType.HandRight];
+								if ( this.rightHand.TrackingState == JointTrackingState.Tracked )
+								{
+									rightHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( rightHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
+									this.rightHandPosition.X = rightHandPoint.X;
+									this.rightHandPosition.Y = rightHandPoint.Y;
+									Cv.Circle( img, this.rightHandPosition, 10, new CvScalar( 0, 0, 255 ), -1 );
+								}
+							}
+						}
+					}
 					// Write As Bitmap
 					this.colorBitmap.WritePixels( new Int32Rect( 0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight ), this.colorPixels, this.colorBitmap.PixelWidth * sizeof( int ), 0 );
-					
-					
 				}
 			}
 		}
@@ -138,7 +201,7 @@ namespace PainterKinect
 
 					// Get Reliable Min Max Value
 					int minDepth = depthFrame.MinDepth;
-					int maxDepth = 2000;// depthFrame.MaxDepth;
+					int maxDepth = depthFrame.MaxDepth;
 
 					// Convert Depth to RGB
 					int colorPixelIndex = 0;
@@ -150,6 +213,7 @@ namespace PainterKinect
 						// Convert Intensity To Byte
 						// TODO Make A lookup Table for Performance
 						depthValue = (short)( depthValue >= minDepth && depthValue <= maxDepth ? depthValue : 0 );
+						// Normalize
 						byte intensity = (byte)( depthValue * 255 / ( maxDepth - minDepth ) );
 
 						// BGR
