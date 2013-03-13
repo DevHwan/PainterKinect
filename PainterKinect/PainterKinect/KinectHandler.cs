@@ -6,6 +6,7 @@ using Microsoft.Kinect;
 using System.Windows.Media.Imaging;
 using System.Windows.Media;
 using System.Windows;
+using OpenCvSharp;
 
 namespace PainterKinect
 {
@@ -23,6 +24,8 @@ namespace PainterKinect
 		public WriteableBitmap colorBitmap;
 		public WriteableBitmap depthBitmap;
 
+		// Skeleton Container
+		public Skeleton[] skeletons;
 
 
 		public KinectHandler()
@@ -67,8 +70,12 @@ namespace PainterKinect
 				// Add Depth Stream Event Handler
 				this.sensor.DepthFrameReady += OnDepthFrameReady;
 
+				// Set Tracking Mode
+				this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
 				// Enable Skeleton Stream
-				this.sensor.SkeletonStream.Enable();
+				this.sensor.SkeletonStream.Enable( new TransformSmoothParameters() { Correction = 0.5f, JitterRadius = 0.05f, MaxDeviationRadius = 0.05f, Prediction = 0.5f, Smoothing = 0.5f } );
+				// Allocate Skeleton Data Array
+				this.skeletons = new Skeleton[this.sensor.SkeletonStream.FrameSkeletonArrayLength];
 				// Add Skeleton Stream Event Handler
 				this.sensor.SkeletonFrameReady += OnSkeletonFrameReady;
 
@@ -76,6 +83,7 @@ namespace PainterKinect
 				try
 				{
 					this.sensor.Start();
+					Logging.PrintLog( "InitializeKinectSensor", "Kinect is Successfully Initialized" );
 				}
 				catch (System.Exception ex)
 				{
@@ -102,6 +110,7 @@ namespace PainterKinect
 
 		private void OnColorFrameReady( object sender, ColorImageFrameReadyEventArgs e )
 		{
+			// Grab Color Frame
 			using ( ColorImageFrame colorFrame = e.OpenColorImageFrame() )
 			{
 				if ( colorFrame != null )
@@ -111,12 +120,15 @@ namespace PainterKinect
 
 					// Write As Bitmap
 					this.colorBitmap.WritePixels( new Int32Rect( 0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight ), this.colorPixels, this.colorBitmap.PixelWidth * sizeof( int ), 0 );
+					
+					
 				}
 			}
 		}
 
 		private void OnDepthFrameReady( object sender, DepthImageFrameReadyEventArgs e )
 		{
+			// Grab Depth Frame
 			using ( DepthImageFrame depthFrame = e.OpenDepthImageFrame() )
 			{
 				if ( depthFrame != null )
@@ -156,19 +168,15 @@ namespace PainterKinect
 
 		private void OnSkeletonFrameReady( object sender, SkeletonFrameReadyEventArgs e )
 		{
-			Skeleton[] skeletons;
-
+			// Grab Skeleton Frame
 			using ( SkeletonFrame skeletonFrame = e.OpenSkeletonFrame() )
 			{
-				if ( skeletonFrame != null )
+				if ( skeletonFrame != null && this.skeletons != null )
 				{
-					// Allocate Skeleton Frames
-					skeletons = new Skeleton[skeletonFrame.SkeletonArrayLength];
 					// Copy Skeleton Datas
 					skeletonFrame.CopySkeletonDataTo( skeletons );
 				}
 			}
-
 
 		}
 	}
