@@ -41,14 +41,6 @@ namespace PainterKinect
 				this.Close();
 			}
 
-			// Create Color Window
-			ColorWindow colorWindow = new ColorWindow( this.kinectHandler );
-			colorWindow.Show();
-
-			// Create Depth Window
-			DepthImageWindow depthWindow = new DepthImageWindow( this.kinectHandler );
-			depthWindow.Show();
-
 			// Log
 			Logging.PrintLog( "MainWindow", "Program Initialized!" );
 		}

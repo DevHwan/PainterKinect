@@ -20,9 +20,10 @@ namespace PainterKinect
 		private DepthImagePixel[] depthPixels;
 		private byte[] depthColorPixels;
 
-		// Bitmap Container
-		public WriteableBitmap colorBitmap;
-		public WriteableBitmap depthBitmap;
+		// Color Image Data
+		private CvMat cImg;
+		// Depth Image Data
+		private CvMat dImg;
 
 		// Skeleton Container
 		public Skeleton[] skeletons;
@@ -66,8 +67,9 @@ namespace PainterKinect
 				this.sensor.ColorStream.Enable( ColorImageFormat.RgbResolution640x480Fps30 );
 				// Allocate Pixel Data Array
 				this.colorPixels = new byte[this.sensor.ColorStream.FramePixelDataLength];
-				// Set Writeable Bitmap
-				this.colorBitmap = new WriteableBitmap( this.sensor.ColorStream.FrameWidth, this.sensor.ColorStream.FrameHeight, 96.0, 96.0, PixelFormats.Bgr32, null );
+				// Set Color Image
+				this.cImg = new CvMat( this.sensor.ColorStream.FrameHeight, this.sensor.ColorStream.FrameWidth, MatrixType.U8C4 );
+				Cv.SetData( this.cImg, this.colorPixels, Cv.AUTOSTEP );
 				// Add Color Stream Event Handler
 				this.sensor.ColorFrameReady += OnColorFrameReady;
 
@@ -77,8 +79,9 @@ namespace PainterKinect
 				this.depthPixels = new DepthImagePixel[this.sensor.DepthStream.FramePixelDataLength];
 				// Allocate Pixel Depth Color Data Array
 				this.depthColorPixels = new byte[this.sensor.DepthStream.FramePixelDataLength * sizeof( int )];
-				// Set Writeable Bitmap
-				this.depthBitmap = new WriteableBitmap( this.sensor.DepthStream.FrameWidth, this.sensor.DepthStream.FrameHeight, 96.0, 96.0, PixelFormats.Bgr32, null );
+				// Set Depth Image
+				this.dImg = new CvMat( this.sensor.DepthStream.FrameHeight, this.sensor.DepthStream.FrameWidth, MatrixType.U8C4 );
+				Cv.SetData( this.dImg, this.depthColorPixels, Cv.AUTOSTEP );
 				// Add Depth Stream Event Handler
 				this.sensor.DepthFrameReady += OnDepthFrameReady;
 
@@ -114,10 +117,14 @@ namespace PainterKinect
 
 		public void DestroyKinect()
 		{
+			// Check Sensor State
 			if ( this.sensor != null )
 			{
 				this.sensor.Stop();
 			}
+
+			// Destroy All Windows
+			Cv.DestroyAllWindows();
 		}
 
 		private void OnColorFrameReady( object sender, ColorImageFrameReadyEventArgs e )
@@ -125,66 +132,70 @@ namespace PainterKinect
 			// Grab Color Frame
 			using ( ColorImageFrame colorFrame = e.OpenColorImageFrame() )
 			{
+
+				// Check State
+				if ( this.cImg == null )
+					return;
+
 				if ( colorFrame != null )
 				{
 					// Copy Pixel Data
 					colorFrame.CopyPixelDataTo( this.colorPixels );
 
+					// Smooth Image
+					Cv.Smooth( this.cImg, this.cImg );
 
-					// Grab Color Image To Mat
-					using ( CvMat img = new CvMat( this.colorBitmap.PixelHeight, this.colorBitmap.PixelWidth, MatrixType.U8C4, this.colorPixels ) )
+					// Draw Skeleton Position
+					if ( skeletons != null )
 					{
-						// To Reduce Noise
-						Cv.Smooth( img, img, SmoothType.Gaussian );
-
-						// Draw Skeleton Position
-						if ( skeletons != null )
+						// Find Appropriate Skeleton
+						Skeleton targetSkeleton = null;
+						for ( int i = 0 ; i < skeletons.Length ; i++ )
 						{
-							// Find Appropriate Skeleton
-							Skeleton targetSkeleton = null;
-							for ( int i = 0 ; i < skeletons.Length ; i++ )
-							{
-								// Skip Invalid State
-								if ( skeletons[i] == null )
-									continue;
+							// Skip Invalid State
+							if ( skeletons[i] == null )
+								continue;
 
-								// Only Fully Tracked Skeleton
-								if ( skeletons[i].TrackingState == SkeletonTrackingState.Tracked )
-								{
-									// Set Target Skeleton - If exists Set to nearest.
-									if ( targetSkeleton == null )
-										targetSkeleton = skeletons[i];
-									else if ( targetSkeleton.Position.Z > skeletons[i].Position.Z )
-										targetSkeleton = skeletons[i];
-								}
+							// Only Fully Tracked Skeleton
+							if ( skeletons[i].TrackingState == SkeletonTrackingState.Tracked )
+							{
+								// Set Target Skeleton - If exists Set to nearest.
+								if ( targetSkeleton == null )
+									targetSkeleton = skeletons[i];
+								else if ( targetSkeleton.Position.Z > skeletons[i].Position.Z )
+									targetSkeleton = skeletons[i];
 							}
-							if ( targetSkeleton != null )
-							{
-								// Left Hand Position
-								this.leftHand = targetSkeleton.Joints[JointType.HandLeft];
-								// Check Tracked Status
-								if ( this.leftHand.TrackingState == JointTrackingState.Tracked )
-								{
-									leftHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( leftHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
-									this.leftHandPosition.X = leftHandPoint.X;
-									this.leftHandPosition.Y = leftHandPoint.Y;
-									Cv.Circle( img, leftHandPosition, 10, new CvScalar( 0, 0, 255 ), -1 );
-								}
+						}
 
-								// Right Hand Position
-								this.rightHand = targetSkeleton.Joints[JointType.HandRight];
-								if ( this.rightHand.TrackingState == JointTrackingState.Tracked )
-								{
-									rightHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( rightHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
-									this.rightHandPosition.X = rightHandPoint.X;
-									this.rightHandPosition.Y = rightHandPoint.Y;
-									Cv.Circle( img, this.rightHandPosition, 10, new CvScalar( 0, 0, 255 ), -1 );
-								}
+						if ( targetSkeleton != null )
+						{
+							// Left Hand Position
+							this.leftHand = targetSkeleton.Joints[JointType.HandLeft];
+							// Check Tracked Status
+							if ( this.leftHand.TrackingState == JointTrackingState.Tracked )
+							{
+								leftHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( leftHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
+								this.leftHandPosition.X = leftHandPoint.X;
+								this.leftHandPosition.Y = leftHandPoint.Y;
+								CvRect rect = new CvRect( leftHandPoint.X - Configuration.HAND_REGION_WIDTH / 2, leftHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
+								Cv.Rectangle( this.cImg, rect, new CvScalar( 0, 0, 255 ), 5 );
+							}
+
+							// Right Hand Position
+							this.rightHand = targetSkeleton.Joints[JointType.HandRight];
+							if ( this.rightHand.TrackingState == JointTrackingState.Tracked )
+							{
+								rightHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( rightHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
+								this.rightHandPosition.X = rightHandPoint.X;
+								this.rightHandPosition.Y = rightHandPoint.Y;
+								CvRect rect = new CvRect( rightHandPoint.X - Configuration.HAND_REGION_WIDTH / 2, rightHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
+								Cv.Rectangle( this.cImg, rect, new CvScalar( 0, 0, 255 ), 5 );
 							}
 						}
 					}
-					// Write As Bitmap
-					this.colorBitmap.WritePixels( new Int32Rect( 0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight ), this.colorPixels, this.colorBitmap.PixelWidth * sizeof( int ), 0 );
+
+					// Show Image
+					Cv.ShowImage( "Color Image", this.cImg );
 				}
 			}
 		}
@@ -224,8 +235,7 @@ namespace PainterKinect
 						colorPixelIndex++;
 					}
 
-					// Write Pixel Data As Bitmap
-					this.depthBitmap.WritePixels( new Int32Rect( 0, 0, this.depthBitmap.PixelWidth, this.depthBitmap.PixelHeight ), this.depthColorPixels, this.depthBitmap.PixelWidth * sizeof( int ), 0 );
+					Cv.ShowImage( "Depth Image", this.dImg );
 				}
 			}
 		}
