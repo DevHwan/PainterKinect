@@ -20,10 +20,21 @@ namespace PainterKinect
 		private DepthImagePixel[] depthPixels;
 		private byte[] depthColorPixels;
 
-		// Color Image Data
-		private CvMat cImg;
-		// Depth Image Data
-		private CvMat dImg;
+		// Color & Depth Image
+		private CvMat colorImageMat;
+		private CvMat depthImageMat;
+
+		// Hand Region Image
+		private CvMat leftHandImageMat;
+		private CvMat rightHandImageMat;
+
+		// Hand Region Depth Image
+		private CvMat leftHandDepthImageMat;
+		private CvMat rightHandDepthImageMat;
+
+		// Hand Tracked State
+		private bool leftHandFound = false;
+		private bool rightHandFound = false;
 
 		// Skeleton Container
 		public Skeleton[] skeletons;
@@ -33,12 +44,16 @@ namespace PainterKinect
 		private Joint rightHand;
 
 		// ColorCoordinate Position
-		ColorImagePoint leftHandPoint;
-		ColorImagePoint rightHandPoint;
+		private ColorImagePoint leftHandPoint;
+		private ColorImagePoint rightHandPoint;
 
 		// Image Position
-		CvPoint leftHandPosition;
-		CvPoint rightHandPosition;
+		private CvPoint leftHandPosition;
+		private CvPoint rightHandPosition;
+
+		// Hand Region Rect
+		private CvRect leftHandRect;
+		private CvRect rightHandRect;
 
 
 		public KinectHandler()
@@ -68,8 +83,12 @@ namespace PainterKinect
 				// Allocate Pixel Data Array
 				this.colorPixels = new byte[this.sensor.ColorStream.FramePixelDataLength];
 				// Set Color Image
-				this.cImg = new CvMat( this.sensor.ColorStream.FrameHeight, this.sensor.ColorStream.FrameWidth, MatrixType.U8C4 );
-				Cv.SetData( this.cImg, this.colorPixels, Cv.AUTOSTEP );
+				this.colorImageMat = new CvMat( this.sensor.ColorStream.FrameHeight, this.sensor.ColorStream.FrameWidth, MatrixType.U8C4 );
+				Cv.SetData( this.colorImageMat, this.colorPixels, Cv.AUTOSTEP );
+				this.leftHandImageMat = new CvMat( Configuration.HAND_REGION_HEIGHT, Configuration.HAND_REGION_WIDTH, MatrixType.U8C4 );
+				this.rightHandImageMat = new CvMat( Configuration.HAND_REGION_HEIGHT, Configuration.HAND_REGION_WIDTH, MatrixType.U8C4 );
+				this.leftHandDepthImageMat = new CvMat( Configuration.HAND_REGION_HEIGHT, Configuration.HAND_REGION_HEIGHT, MatrixType.U8C4 );
+				this.rightHandDepthImageMat = new CvMat( Configuration.HAND_REGION_HEIGHT, Configuration.HAND_REGION_HEIGHT, MatrixType.U8C4 );
 				// Add Color Stream Event Handler
 				this.sensor.ColorFrameReady += OnColorFrameReady;
 
@@ -80,8 +99,8 @@ namespace PainterKinect
 				// Allocate Pixel Depth Color Data Array
 				this.depthColorPixels = new byte[this.sensor.DepthStream.FramePixelDataLength * sizeof( int )];
 				// Set Depth Image
-				this.dImg = new CvMat( this.sensor.DepthStream.FrameHeight, this.sensor.DepthStream.FrameWidth, MatrixType.U8C4 );
-				Cv.SetData( this.dImg, this.depthColorPixels, Cv.AUTOSTEP );
+				this.depthImageMat = new CvMat( this.sensor.DepthStream.FrameHeight, this.sensor.DepthStream.FrameWidth, MatrixType.U8C4 );
+				Cv.SetData( this.depthImageMat, this.depthColorPixels, Cv.AUTOSTEP );
 				// Add Depth Stream Event Handler
 				this.sensor.DepthFrameReady += OnDepthFrameReady;
 
@@ -93,6 +112,8 @@ namespace PainterKinect
 				this.skeletons = new Skeleton[this.sensor.SkeletonStream.FrameSkeletonArrayLength];
 				// Add Skeleton Stream Event Handler
 				this.sensor.SkeletonFrameReady += OnSkeletonFrameReady;
+
+
 
 				// Try To Start Device
 				try
@@ -133,17 +154,13 @@ namespace PainterKinect
 			using ( ColorImageFrame colorFrame = e.OpenColorImageFrame() )
 			{
 
-				// Check State
-				if ( this.cImg == null )
-					return;
-
 				if ( colorFrame != null )
 				{
 					// Copy Pixel Data
 					colorFrame.CopyPixelDataTo( this.colorPixels );
 
 					// Smooth Image
-					Cv.Smooth( this.cImg, this.cImg );
+					//Cv.Smooth( this.colorImageMat, this.colorImageMat, SmoothType.Gaussian );
 
 					// Draw Skeleton Position
 					if ( skeletons != null )
@@ -174,28 +191,71 @@ namespace PainterKinect
 							// Check Tracked Status
 							if ( this.leftHand.TrackingState == JointTrackingState.Tracked )
 							{
+								this.leftHandFound = true;
+
 								leftHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( leftHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
 								this.leftHandPosition.X = leftHandPoint.X;
 								this.leftHandPosition.Y = leftHandPoint.Y;
-								CvRect rect = new CvRect( leftHandPoint.X - Configuration.HAND_REGION_WIDTH / 2, leftHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-								Cv.Rectangle( this.cImg, rect, new CvScalar( 0, 0, 255 ), 5 );
+								int topleft_x = leftHandPoint.X - Configuration.HAND_REGION_WIDTH / 2;
+								int topleft_y = leftHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2;
+
+								if ( topleft_x < 0 )
+									topleft_x = 0;
+								if ( topleft_x + Configuration.HAND_REGION_WIDTH >= this.sensor.ColorStream.FrameWidth )
+									topleft_x = this.sensor.ColorStream.FrameWidth - Configuration.HAND_REGION_WIDTH;
+								if ( topleft_y < 0 )
+									topleft_y = 0;
+								if ( topleft_y + Configuration.HAND_REGION_HEIGHT >= this.sensor.ColorStream.FrameHeight )
+									topleft_y = this.sensor.ColorStream.FrameHeight - Configuration.HAND_REGION_HEIGHT;
+
+								leftHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
+								Cv.Rectangle( this.colorImageMat, leftHandRect, new CvScalar( 0, 0, 255 ), 5 );
+								Cv.GetSubRect( this.colorImageMat, out this.leftHandImageMat, leftHandRect );
+							}
+							else
+							{
+								this.leftHandFound = false;
 							}
 
 							// Right Hand Position
 							this.rightHand = targetSkeleton.Joints[JointType.HandRight];
 							if ( this.rightHand.TrackingState == JointTrackingState.Tracked )
 							{
+								this.rightHandFound = true;
+
 								rightHandPoint = this.sensor.CoordinateMapper.MapSkeletonPointToColorPoint( rightHand.Position, ColorImageFormat.RgbResolution640x480Fps30 );
 								this.rightHandPosition.X = rightHandPoint.X;
 								this.rightHandPosition.Y = rightHandPoint.Y;
-								CvRect rect = new CvRect( rightHandPoint.X - Configuration.HAND_REGION_WIDTH / 2, rightHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-								Cv.Rectangle( this.cImg, rect, new CvScalar( 0, 0, 255 ), 5 );
+
+								int topleft_x = rightHandPoint.X - Configuration.HAND_REGION_WIDTH / 2;
+								int topleft_y = rightHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2;
+
+								if ( topleft_x < 0 )
+									topleft_x = 0;
+								if ( topleft_x + Configuration.HAND_REGION_WIDTH >= this.sensor.ColorStream.FrameWidth )
+									topleft_x = this.sensor.ColorStream.FrameWidth - Configuration.HAND_REGION_WIDTH;
+								if ( topleft_y < 0 )
+									topleft_y = 0;
+								if ( topleft_y + Configuration.HAND_REGION_HEIGHT >= this.sensor.ColorStream.FrameHeight )
+									topleft_y = this.sensor.ColorStream.FrameHeight - Configuration.HAND_REGION_HEIGHT;
+
+								rightHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
+								Cv.Rectangle( this.colorImageMat, rightHandRect, new CvScalar( 0, 0, 255 ), 5 );
+								Cv.GetSubRect( this.colorImageMat, out this.rightHandImageMat, rightHandRect );
+							}
+							else
+							{
+								this.rightHandFound = false;
 							}
 						}
 					}
 
-					// Show Image
-					Cv.ShowImage( "Color Image", this.cImg );
+					// Show Color Image
+					Cv.ShowImage( "Color Image", this.colorImageMat );
+					//if ( this.leftHandImageMat != null )
+					Cv.ShowImage( "Left Hand Region Image", this.leftHandImageMat );
+					//if ( this.rightHandImageMat != null )
+					Cv.ShowImage( "RIght Hand Region Image", this.rightHandImageMat );
 				}
 			}
 		}
@@ -235,7 +295,53 @@ namespace PainterKinect
 						colorPixelIndex++;
 					}
 
-					Cv.ShowImage( "Depth Image", this.dImg );
+					if ( this.leftHand.TrackingState == JointTrackingState.Tracked )
+					{
+						DepthImagePoint ldHand = this.sensor.CoordinateMapper.MapSkeletonPointToDepthPoint( this.leftHand.Position, DepthImageFormat.Resolution640x480Fps30 );
+
+						int topleft_x = ldHand.X - Configuration.HAND_REGION_WIDTH / 2;
+						int topleft_y = ldHand.Y - Configuration.HAND_REGION_HEIGHT / 2;
+
+						if ( topleft_x < 0 )
+							topleft_x = 0;
+						if ( topleft_x + Configuration.HAND_REGION_WIDTH >= this.sensor.ColorStream.FrameWidth )
+							topleft_x = this.sensor.ColorStream.FrameWidth - Configuration.HAND_REGION_WIDTH;
+						if ( topleft_y < 0 )
+							topleft_y = 0;
+						if ( topleft_y + Configuration.HAND_REGION_HEIGHT >= this.sensor.ColorStream.FrameHeight )
+							topleft_y = this.sensor.ColorStream.FrameHeight - Configuration.HAND_REGION_HEIGHT;
+
+						CvRect ldHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
+						Cv.Rectangle( depthImageMat, ldHandRect, new CvScalar( 0, 0, 255 ), 5 );
+						Cv.GetSubRect( this.depthImageMat, out this.leftHandDepthImageMat, ldHandRect );
+
+					}
+					if ( this.rightHand.TrackingState == JointTrackingState.Tracked )
+					{
+						DepthImagePoint rdHand = this.sensor.CoordinateMapper.MapSkeletonPointToDepthPoint( this.rightHand.Position, DepthImageFormat.Resolution640x480Fps30 );
+
+						int topleft_x = rdHand.X - Configuration.HAND_REGION_WIDTH / 2;
+						int topleft_y = rdHand.Y - Configuration.HAND_REGION_HEIGHT / 2;
+
+						if ( topleft_x < 0 )
+							topleft_x = 0;
+						if ( topleft_x + Configuration.HAND_REGION_WIDTH >= this.sensor.ColorStream.FrameWidth )
+							topleft_x = this.sensor.ColorStream.FrameWidth - Configuration.HAND_REGION_WIDTH;
+						if ( topleft_y < 0 )
+							topleft_y = 0;
+						if ( topleft_y + Configuration.HAND_REGION_HEIGHT >= this.sensor.ColorStream.FrameHeight )
+							topleft_y = this.sensor.ColorStream.FrameHeight - Configuration.HAND_REGION_HEIGHT;
+
+						CvRect rdHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
+						Cv.Rectangle( depthImageMat, rdHandRect, new CvScalar( 0, 0, 255 ), 5 );
+						Cv.GetSubRect( this.depthImageMat, out this.rightHandDepthImageMat, rdHandRect );
+
+					}
+
+					// Show Depth Image
+					Cv.ShowImage( "Depth Image", this.depthImageMat );
+					Cv.ShowImage( "Left Hand Region Depth Image", this.leftHandDepthImageMat );
+					Cv.ShowImage( "Right Hand Region Depth Image", this.rightHandDepthImageMat );
 				}
 			}
 		}
