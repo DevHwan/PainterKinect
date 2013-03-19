@@ -37,6 +37,9 @@ namespace PainterKinect
 			// Initialize Kinect
 			if ( this.kinectHandler.InitializeKinectSensor() != KinectStatus.Connected )
 			{
+				// Show MessageBox
+				MessageBox.Show( "Kinect Initialization Failure.", "Kinect Not Connected!!" );
+
 				// Close Window
 				this.Close();
 			}
