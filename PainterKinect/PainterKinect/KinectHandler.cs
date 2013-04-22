@@ -55,6 +55,9 @@ namespace PainterKinect
 		private CvRect leftHandRect;
 		private CvRect rightHandRect;
 
+		// Skin Color Model Module
+		private SkinColorModel skinModel;
+
 
 		public KinectHandler()
 		{
@@ -113,7 +116,8 @@ namespace PainterKinect
 				// Add Skeleton Stream Event Handler
 				this.sensor.SkeletonFrameReady += OnSkeletonFrameReady;
 
-
+				// Initialize SkinColorModel Module
+				this.skinModel = new SkinColorModel();
 
 				// Try To Start Device
 				try
@@ -162,6 +166,7 @@ namespace PainterKinect
 					// Smooth Image
 					//Cv.Smooth( this.colorImageMat, this.colorImageMat, SmoothType.Gaussian );
 
+
 					// Draw Skeleton Position
 					if ( skeletons != null )
 					{
@@ -199,6 +204,7 @@ namespace PainterKinect
 								int topleft_x = leftHandPoint.X - Configuration.HAND_REGION_WIDTH / 2;
 								int topleft_y = leftHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2;
 
+								// Bound Check
 								if ( topleft_x < 0 )
 									topleft_x = 0;
 								if ( topleft_x + Configuration.HAND_REGION_WIDTH >= this.sensor.ColorStream.FrameWidth )
@@ -211,6 +217,8 @@ namespace PainterKinect
 								leftHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
 								Cv.Rectangle( this.colorImageMat, leftHandRect, new CvScalar( 0, 0, 255 ), 5 );
 								Cv.GetSubRect( this.colorImageMat, out this.leftHandImageMat, leftHandRect );
+
+								//this.skinModel.DetectSkinRegion( this.leftHandImageMat, )
 							}
 							else
 							{
@@ -230,6 +238,7 @@ namespace PainterKinect
 								int topleft_x = rightHandPoint.X - Configuration.HAND_REGION_WIDTH / 2;
 								int topleft_y = rightHandPoint.Y - Configuration.HAND_REGION_HEIGHT / 2;
 
+								// Bound Check
 								if ( topleft_x < 0 )
 									topleft_x = 0;
 								if ( topleft_x + Configuration.HAND_REGION_WIDTH >= this.sensor.ColorStream.FrameWidth )
@@ -256,6 +265,7 @@ namespace PainterKinect
 					Cv.ShowImage( "Left Hand Region Image", this.leftHandImageMat );
 					//if ( this.rightHandImageMat != null )
 					Cv.ShowImage( "RIght Hand Region Image", this.rightHandImageMat );
+
 				}
 			}
 		}

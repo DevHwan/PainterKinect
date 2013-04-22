@@ -28,6 +28,11 @@ namespace PainterKinect
 			// Initialize Components
 			InitializeComponent();
 
+			// Get Screen Size
+			Configuration.SCREEN_WIDTH = System.Windows.SystemParameters.PrimaryScreenWidth;
+			Configuration.SCREEN_HEIGHT = System.Windows.SystemParameters.PrimaryScreenHeight;
+			Configuration.SCREEN_ASPECT = Configuration.SCREEN_WIDTH / Configuration.SCREEN_HEIGHT;
+
 			// Initialize Logging Module
 			Logging.InitializeLogging();
 
