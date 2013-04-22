@@ -7,6 +7,6 @@ namespace PainterKinect
 {
 	class TouchEventGenerator
 	{
-
+		// To Create & Handle Various Touch Events
 	}
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using OpenCvSharp;
+using System.Runtime.InteropServices;
 
 namespace PainterKinect
 {
@@ -36,33 +37,45 @@ namespace PainterKinect
 			}
 		}
 
-		public void DetectSkinRegion( CvMat rgbImage, float colorThreshold, int areaThreshold )
+		public int DetectSkinRegion( IplImage rgbImage, float colorThreshold, int areaThreshold )
 		{
-			CvScalar pVal;
+			if ( !isInitialized )
+				return -1;
+
+			// Area Count
 			int areaCnt = 0;
 
-			for ( int dy = 0 ; dy < rgbImage.GetSize().Height ; dy++ )
-			{
-				for ( int dx = 0 ; dx < rgbImage.GetSize().Width ; dx++ )
-				{
-					pVal = rgbImage.Get2D( dy, dx );
+			// Image Data Ptr
 
-					float nVal = this.colorModelData[(int)pVal.Val0 + 256 * (int)pVal.Val1 + 256 * 256 * (int)pVal.Val2];
+			CvScalar dat;
+
+			for ( int dy = 0 ; dy < rgbImage.Height ; dy++ )
+			{
+				for ( int dx = 0 ; dx < rgbImage.Width ; dx++ )
+				{
+					dat = rgbImage.Get2D( dy, dx );
+
+					float nVal = this.colorModelData[(int)dat.Val0 + 256 * (int)dat.Val1 + 256 * 256 * (int)dat.Val2 ];
 
 					if ( nVal >= colorThreshold )
 					{
-						rgbImage[dy, dx, 0] = rgbImage[dy, dx, 1] = rgbImage[dy, dx, 2] = 100;
+						//rgbImage.Set2D( dy, dx, new CvScalar( 255, 255, 255 ) );
 						areaCnt++;
 					}
 					else
 					{
-						rgbImage[dy, dx, 0] = rgbImage[dy, dx, 1] = rgbImage[dy, dx, 2] = 0;
+						rgbImage.Set2D( dy, dx, new CvScalar( 0, 0, 0 ) );
 					}
 				}
 			}
 
-			rgbImage.Erode( rgbImage );
-			rgbImage.Dilate( rgbImage );
+			//Cv.Erode( rgbImage, rgbImage );
+			//Cv.Dilate( rgbImage, rgbImage );
+
+			if ( areaCnt > areaThreshold )
+				return 1;
+			else
+				return 0;
 		}
 	}
 }
