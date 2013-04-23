@@ -48,20 +48,23 @@ namespace PainterKinect
 			int areaCnt = 0;
 
 			// Image Data Ptr
-
-			CvScalar dat;
+			byte b, g, r;
 
 			for ( int dy = 0 ; dy < rgbImage.Height ; dy++ )
 			{
 				for ( int dx = 0 ; dx < rgbImage.Width ; dx++ )
 				{
-					dat = rgbImage.Get2D( dy, dx );
+					unsafe
+					{
+						b = rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 0];
+						g = rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 1];
+						r = rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 2];
+					}
 
-					float nVal = this.colorModelData[(int)dat.Val0 + 256 * (int)dat.Val1 + 256 * 256 * (int)dat.Val2 ];
+					float nVal = this.colorModelData[(int)b + 256 * (int)g + 256 * 256 * (int)r ];
 
 					if ( nVal >= colorThreshold )
 					{
-						//rgbImage.Set2D( dy, dx, new CvScalar( 255, 255, 255 ) );
 						areaCnt++;
 					}
 					else
@@ -77,8 +80,6 @@ namespace PainterKinect
 				}
 			}
 
-			Cv.Erode( rgbImage, rgbImage );
-			Cv.Dilate( rgbImage, rgbImage );
 
 			if ( areaCnt > areaThreshold )
 				return 1;
