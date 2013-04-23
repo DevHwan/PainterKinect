@@ -37,54 +37,48 @@ namespace PainterKinect
 			}
 		}
 
-		public int DetectSkinRegion( IplImage rgbImage, float colorThreshold = 0.4f, int areaThreshold = 1000 )
+		public void FilterSkinRegion( IplImage rgbImage, float colorThreshold = 0.4f )
 		{
 			if ( !isInitialized )
-				return -1;
+				return;
 
+			// Color Model Value
+			float nVal;
+
+			// Get Image Channel
 			int channel = rgbImage.NChannels;
 
-			// Area Count
-			int areaCnt = 0;
 
 			// Image Data Ptr
-			byte b, g, r;
+			int b, g, r;
 
 			for ( int dy = 0 ; dy < rgbImage.Height ; dy++ )
 			{
 				for ( int dx = 0 ; dx < rgbImage.Width ; dx++ )
 				{
+					// Get BGR Value
 					unsafe
 					{
-						b = rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 0];
-						g = rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 1];
-						r = rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 2];
+						b = (int)rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 0]; // B
+						g = (int)rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 1]; // G
+						r = (int)rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 2]; // R
 					}
 
-					float nVal = this.colorModelData[(int)b + 256 * (int)g + 256 * 256 * (int)r ];
+					nVal = this.colorModelData[b + 256 * g + 256 * 256 * r];
 
-					if ( nVal >= colorThreshold )
+					// Determine & Filter Skin Region
+					if ( nVal < colorThreshold )
 					{
-						areaCnt++;
-					}
-					else
-					{
+						// Not Skin Color
 						unsafe
 						{
-							// B G R
-							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 0] = (byte)0;
-							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 1] = (byte)0;
-							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 2] = (byte)0;
+							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 0] = (byte)0; // B
+							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 1] = (byte)0; // G
+							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 2] = (byte)0; // R
 						}
 					}
 				}
 			}
-
-
-			if ( areaCnt > areaThreshold )
-				return 1;
-			else
-				return 0;
 		}
 	}
 }

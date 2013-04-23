@@ -8,6 +8,14 @@ using System.Windows.Media;
 using System.Windows;
 using OpenCvSharp;
 
+
+//////////////////////////////////////////////////////////////////////////
+// Depth Value Range
+//  - byte : 0 ~ 255 (1 is far, 255 is near, 0 is unstable value)
+// Color Value Range
+//  - color : 0 ~ 255 * 3 (B G R)
+//////////////////////////////////////////////////////////////////////////
+
 namespace PainterKinect
 {
 	public class KinectHandler
@@ -60,6 +68,12 @@ namespace PainterKinect
 		private int maxDepth = 0;
 		private int minDepth = int.MaxValue;
 
+		// Depth Value Lookup Table
+		private byte[] depthLookupTable;
+
+		// Exit Status
+		private bool isShutDown = false;
+
 		public KinectHandler()
 		{
 		}
@@ -90,8 +104,17 @@ namespace PainterKinect
 				this.minDepth = this.sensor.DepthStream.MinDepth;
 				this.maxDepth = this.sensor.DepthStream.MaxDepth;
 
-				// Allocate Color Image
-				this.colorImage = Cv.CreateImage( new CvSize( this.sensor.ColorStream.FrameWidth, this.sensor.ColorStream.FrameHeight ), BitDepth.U8, 4 );
+				// Allocate Depth Lookup Table
+				this.depthLookupTable = new byte[this.maxDepth];
+				for ( int i = 0 ; i < maxDepth ; i++ )
+				{
+					short depthValue = (short)i;
+					depthValue = (short)( depthValue >= this.minDepth && depthValue <= this.maxDepth ? ~depthValue : 0 );
+					this.depthLookupTable[i] = (byte)( depthValue * 255 / ( this.maxDepth - this.minDepth ) );
+				}
+
+					// Allocate Color Image
+					this.colorImage = Cv.CreateImage( new CvSize( this.sensor.ColorStream.FrameWidth, this.sensor.ColorStream.FrameHeight ), BitDepth.U8, 4 );
 				// Allocate Depth Image
 				this.depthImage = Cv.CreateImage( new CvSize( this.sensor.DepthStream.FrameWidth, this.sensor.DepthStream.FrameHeight ), BitDepth.U8, 1 );
 
@@ -142,6 +165,9 @@ namespace PainterKinect
 
 		public void DestroyKinect()
 		{
+			// Set ShutDown Mode
+			this.isShutDown = true;
+
 			// Check Sensor State
 			if ( this.sensor != null )
 			{
@@ -164,7 +190,6 @@ namespace PainterKinect
 		private void FilterFarObjects( IplImage inputImage, IplImage depthImage, byte distance = 50 )
 		{
 			// Check!! Input & Depth must have same size
-
 			int channel = inputImage.NChannels;
 
 			byte currentNearVal;
@@ -174,11 +199,13 @@ namespace PainterKinect
 			{
 				for ( int dx = 0 ; dx < inputImage.Width ; dx++ )
 				{
+					// Get Current Pixel's Depth Value
 					unsafe
 					{
-						currentNearVal = depthImage.ImageDataPtr[dy * depthImage.WidthStep + depthImage.NChannels * dx + 0];
+						currentNearVal = depthImage.ImageDataPtr[dy * depthImage.WidthStep + depthImage.NChannels * dx];
 					}
 
+					// Remove Far Objects
 					if ( currentNearVal < distance )
 					{
 						unsafe
@@ -194,6 +221,9 @@ namespace PainterKinect
 
 		private void OnAllFrameReady( object sender, AllFramesReadyEventArgs e )
 		{
+			if ( this.isShutDown )
+				return;
+
 			// 1. Process Skeleton Data
 			// Grab Skeleton Frame
 			using ( SkeletonFrame skeletonFrame = e.OpenSkeletonFrame() )
@@ -222,19 +252,18 @@ namespace PainterKinect
 						// Get Depth Value For This Pixel
 						depthValue = depthPixels[i].Depth;
 
-						// Convert Intensity To Byte
-						// TODO Make A lookup Table for Performance
-						depthValue = (short)( depthValue >= this.minDepth && depthValue <= this.maxDepth ? ~depthValue : 0 );
-
 						unsafe
 						{
-							this.depthImage.ImageDataPtr[colorPixelIndex++] = (byte)( depthValue * 255 / ( this.maxDepth - this.minDepth ) );
+							if ( depthValue > this.maxDepth || depthValue < this.minDepth )
+							{
+								this.depthImage.ImageDataPtr[colorPixelIndex++] = (byte)0;
+							}
+							else
+							{
+								this.depthImage.ImageDataPtr[colorPixelIndex++] = this.depthLookupTable[depthValue];//(byte)( depthValue * 255 / ( this.maxDepth - this.minDepth ) );
+							}
 						}
 					}
-
-					// Filter Depth Image
-					//Cv.Smooth( this.depthImage, this.depthImage, SmoothType.Median );
-					//Cv.Dilate( this.depthImage, this.depthImage );
 
 					if ( this.leftHand.TrackingState == JointTrackingState.Tracked )
 					{
@@ -253,7 +282,7 @@ namespace PainterKinect
 							topleft_y = this.sensor.ColorStream.FrameHeight - Configuration.HAND_REGION_HEIGHT;
 
 						CvRect ldHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-						//Cv.Rectangle( this.depthImage, ldHandRect, new CvScalar( 0, 0, 255 ), 5 );
+						//Cv.Rectangle( this.depthImage, ldHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
 						Cv.SetImageROI( this.depthImage, ldHandRect );
 						Cv.Copy( this.depthImage, this.leftHandDepthImage );
 						Cv.ResetImageROI( this.depthImage );
@@ -281,7 +310,7 @@ namespace PainterKinect
 							topleft_y = this.sensor.ColorStream.FrameHeight - Configuration.HAND_REGION_HEIGHT;
 
 						CvRect rdHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-						//Cv.Rectangle( this.depthImage, rdHandRect, new CvScalar( 0, 0, 255 ), 5 );
+						//Cv.Rectangle( this.depthImage, rdHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
 						Cv.SetImageROI( this.depthImage, rdHandRect );
 						Cv.Copy( this.depthImage, this.rightHandDepthImage );
 						Cv.ResetImageROI( this.depthImage );
@@ -375,7 +404,7 @@ namespace PainterKinect
 								FilterFarObjects( this.leftHandImage, this.leftHandDepthImage );
 
 								// Detect By Skin Color Model
-								this.skinModel.DetectSkinRegion( this.leftHandImage, 0.4f, 1000 );
+								this.skinModel.FilterSkinRegion( this.leftHandImage, 0.4f );
 
 								// Smooth Color Hand Image
 								Cv.Smooth( this.leftHandImage, this.leftHandImage, SmoothType.Median );
@@ -427,7 +456,7 @@ namespace PainterKinect
 								FilterFarObjects( this.rightHandImage, this.rightHandDepthImage );
 
 								// Detect By Skin Color Model
-								this.skinModel.DetectSkinRegion( this.rightHandImage, 0.4f, 1000 );
+								this.skinModel.FilterSkinRegion( this.rightHandImage, 0.4f );
 
 								// Smooth Color Hand Image
 								Cv.Smooth( this.rightHandImage, this.rightHandImage, SmoothType.Median );
@@ -448,7 +477,6 @@ namespace PainterKinect
 					Cv.ShowImage( "Left Hand Region Image", this.leftHandImage );
 					//if ( this.rightHandImageMat != null )
 					Cv.ShowImage( "RIght Hand Region Image", this.rightHandImage );
-
 				}
 			}
 		}
