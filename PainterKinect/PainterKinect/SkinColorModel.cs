@@ -42,6 +42,8 @@ namespace PainterKinect
 			if ( !isInitialized )
 				return -1;
 
+			int channel = rgbImage.NChannels;
+
 			// Area Count
 			int areaCnt = 0;
 
@@ -64,7 +66,13 @@ namespace PainterKinect
 					}
 					else
 					{
-						rgbImage.Set2D( dy, dx, new CvScalar( 0, 0, 0 ) );
+						unsafe
+						{
+							// B G R
+							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 0] = (byte)0;
+							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 1] = (byte)0;
+							rgbImage.ImageDataPtr[dy * rgbImage.WidthStep + channel * dx + 2] = (byte)0;
+						}
 					}
 				}
 			}
