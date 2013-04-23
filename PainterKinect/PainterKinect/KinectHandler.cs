@@ -246,7 +246,6 @@ namespace PainterKinect
 					depthFrame.CopyDepthImagePixelDataTo( this.depthPixels );
 
 					// Convert Depth to RGB
-					int colorPixelIndex = 0;
 					for ( int i = 0 ; i < this.depthPixels.Length ; i++ )
 					{
 						// Get Depth Value For This Pixel
@@ -256,11 +255,11 @@ namespace PainterKinect
 						{
 							if ( depthValue > this.maxDepth || depthValue < this.minDepth )
 							{
-								this.depthImage.ImageDataPtr[colorPixelIndex++] = (byte)0;
+								this.depthImage.ImageDataPtr[i] = (byte)0;
 							}
 							else
 							{
-								this.depthImage.ImageDataPtr[colorPixelIndex++] = this.depthLookupTable[depthValue];//(byte)( depthValue * 255 / ( this.maxDepth - this.minDepth ) );
+								this.depthImage.ImageDataPtr[i] = this.depthLookupTable[depthValue];
 							}
 						}
 					}
