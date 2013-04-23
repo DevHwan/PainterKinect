@@ -37,7 +37,7 @@ namespace PainterKinect
 			}
 		}
 
-		public int DetectSkinRegion( IplImage rgbImage, float colorThreshold, int areaThreshold )
+		public int DetectSkinRegion( IplImage rgbImage, float colorThreshold = 0.4f, int areaThreshold = 1000 )
 		{
 			if ( !isInitialized )
 				return -1;
@@ -69,8 +69,8 @@ namespace PainterKinect
 				}
 			}
 
-			//Cv.Erode( rgbImage, rgbImage );
-			//Cv.Dilate( rgbImage, rgbImage );
+			Cv.Erode( rgbImage, rgbImage );
+			Cv.Dilate( rgbImage, rgbImage );
 
 			if ( areaCnt > areaThreshold )
 				return 1;
