@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media;
 using System.Windows;
 using OpenCvSharp;
+using OpenCvSharp.CPlusPlus;
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -20,6 +21,10 @@ namespace PainterKinect
 {
 	public class KinectHandler
 	{
+		// Configuration Constants
+		private const int MAX_DEPTH_RANGE = 2000;
+
+
 		// Target Kinect Sensor
 		private KinectSensor sensor;
 
@@ -33,6 +38,8 @@ namespace PainterKinect
 		// Hand Region Image
 		private IplImage leftHandImage;
 		private IplImage rightHandImage;
+		private IplImage leftHandSkinImage;
+		private IplImage rightHandSkinImage;
 
 		// Hand Region Depth Image
 		private IplImage leftHandDepthImage;
@@ -62,7 +69,7 @@ namespace PainterKinect
 		private CvRect rightHandRect;
 
 		// Skin Color Model Module
-		private SkinColorModel skinModel;
+		private SkinDetector skinDetector;
 
 		// Min Max Depth Value
 		private int maxDepth = 0;
@@ -102,19 +109,19 @@ namespace PainterKinect
 
 				// Set Min Max Depth Value
 				this.minDepth = this.sensor.DepthStream.MinDepth;
-				this.maxDepth = this.sensor.DepthStream.MaxDepth;
+				this.maxDepth = MAX_DEPTH_RANGE;// this.sensor.DepthStream.MaxDepth;
 
 				// Allocate Depth Lookup Table
 				this.depthLookupTable = new byte[this.maxDepth];
 				for ( int i = 0 ; i < maxDepth ; i++ )
 				{
 					short depthValue = (short)i;
-					depthValue = (short)( depthValue >= this.minDepth && depthValue <= this.maxDepth ? ~depthValue : 0 );
-					this.depthLookupTable[i] = (byte)( depthValue * 255 / ( this.maxDepth - this.minDepth ) );
+					depthValue = (short)( depthValue > this.minDepth ? this.maxDepth - depthValue : 0 );
+					this.depthLookupTable[i] = (byte)( ( depthValue * 255 / ( this.maxDepth - this.minDepth ) ) );
 				}
 
-					// Allocate Color Image
-					this.colorImage = Cv.CreateImage( new CvSize( this.sensor.ColorStream.FrameWidth, this.sensor.ColorStream.FrameHeight ), BitDepth.U8, 4 );
+				// Allocate Color Image
+				this.colorImage = Cv.CreateImage( new CvSize( this.sensor.ColorStream.FrameWidth, this.sensor.ColorStream.FrameHeight ), BitDepth.U8, 4 );
 				// Allocate Depth Image
 				this.depthImage = Cv.CreateImage( new CvSize( this.sensor.DepthStream.FrameWidth, this.sensor.DepthStream.FrameHeight ), BitDepth.U8, 1 );
 
@@ -124,6 +131,8 @@ namespace PainterKinect
 				// Allocate Hand Image
 				this.leftHandImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 4 );
 				this.rightHandImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 4 );
+				this.leftHandSkinImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightHandSkinImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
 
 				// Allocate Hand Depth Image
 				this.leftHandDepthImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
@@ -132,12 +141,12 @@ namespace PainterKinect
 				// Set Tracking Mode
 				this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
 				// Enable Skeleton Stream
-				this.sensor.SkeletonStream.Enable( new TransformSmoothParameters() { Correction = 0.5f, JitterRadius = 0.05f, MaxDeviationRadius = 0.05f, Prediction = 0.5f, Smoothing = 0.5f } );
+				this.sensor.SkeletonStream.Enable( new TransformSmoothParameters() { Correction = 0.5f, JitterRadius = 0.05f, MaxDeviationRadius = 0.04f, Prediction = 0.5f, Smoothing = 0.5f } );
 				// Allocate Skeleton Data Array
 				this.skeletons = new Skeleton[this.sensor.SkeletonStream.FrameSkeletonArrayLength];
 
 				// Initialize SkinColorModel Module
-				this.skinModel = new SkinColorModel();
+				this.skinDetector = new SkinDetector();
 
 				// Frame Handler
 				this.sensor.AllFramesReady += OnAllFrameReady;
@@ -181,8 +190,10 @@ namespace PainterKinect
 			Cv.ReleaseImage( this.colorImage );
 			Cv.ReleaseImage( this.depthImage );
 			Cv.ReleaseImage( this.leftHandImage );
+			Cv.ReleaseImage( this.leftHandSkinImage );
 			Cv.ReleaseImage( this.leftHandDepthImage );
 			Cv.ReleaseImage( this.rightHandImage );
+			Cv.ReleaseImage( this.rightHandSkinImage );
 			Cv.ReleaseImage( this.rightHandDepthImage );
 			// 
 		}
@@ -253,7 +264,7 @@ namespace PainterKinect
 
 						unsafe
 						{
-							if ( depthValue > this.maxDepth || depthValue < this.minDepth )
+							if ( depthValue >= this.maxDepth || depthValue <= this.minDepth )
 							{
 								this.depthImage.ImageDataPtr[i] = (byte)0;
 							}
@@ -288,8 +299,6 @@ namespace PainterKinect
 
 						// Filter Hand Depth Image
 						Cv.Smooth( this.leftHandDepthImage, this.leftHandDepthImage, SmoothType.Median );
-						//Cv.Erode( this.leftHandDepthImage, this.leftHandDepthImage);
-						Cv.Dilate( this.leftHandDepthImage, this.leftHandDepthImage );
 
 					}
 					if ( this.rightHand.TrackingState == JointTrackingState.Tracked )
@@ -316,14 +325,7 @@ namespace PainterKinect
 
 						// Filter Hand Depth Image
 						Cv.Smooth( this.rightHandDepthImage, this.rightHandDepthImage, SmoothType.Median );
-						//Cv.Erode( this.rightHandDepthImage, this.rightHandDepthImage );
-						Cv.Dilate( this.rightHandDepthImage, this.rightHandDepthImage );
 					}
-
-					// Show Depth Image
-					Cv.ShowImage( "Depth Image", this.depthImage );
-					Cv.ShowImage( "Left Hand Region Depth Image", this.leftHandDepthImage );
-					Cv.ShowImage( "Right Hand Region Depth Image", this.rightHandDepthImage );
 				}
 			}
 
@@ -389,7 +391,7 @@ namespace PainterKinect
 
 								// Set Hand Position
 								leftHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-								//Cv.Rectangle( this.colorImage, this.leftHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
+								Cv.Rectangle( this.colorImage, this.leftHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
 								Cv.SetImageROI( this.colorImage, this.leftHandRect );
 								// Copy Data
 								Cv.Copy( this.colorImage, this.leftHandImage );
@@ -398,18 +400,17 @@ namespace PainterKinect
 
 								// Smooth Color Hand Image
 								Cv.Smooth( this.leftHandImage, this.leftHandImage, SmoothType.Median );
+								//Cv.Erode( this.leftHandImage, this.leftHandImage );
+								//Cv.Dilate( this.leftHandImage, this.leftHandImage );
+
 
 								// Filter With Depth Image
 								FilterFarObjects( this.leftHandImage, this.leftHandDepthImage );
 
 								// Detect By Skin Color Model
-								this.skinModel.FilterSkinRegion( this.leftHandImage, 0.4f );
-
-								// Smooth Color Hand Image
-								Cv.Smooth( this.leftHandImage, this.leftHandImage, SmoothType.Median );
-								// Erode & Dilate
-								Cv.Erode( this.leftHandImage, this.leftHandImage );
-								Cv.Dilate( this.leftHandImage, this.leftHandImage );
+								this.skinDetector.FilterSkinColorRegion( this.leftHandImage, this.leftHandSkinImage, 0.3f );
+								// Smooth Color Hand Skin Image
+								Cv.Smooth( this.leftHandSkinImage, this.leftHandSkinImage, SmoothType.Median );
 							}
 							else
 							{
@@ -441,7 +442,7 @@ namespace PainterKinect
 
 								// Set Hand Position
 								rightHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-								//Cv.Rectangle( this.colorImage, this.rightHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
+								Cv.Rectangle( this.colorImage, this.rightHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
 								Cv.SetImageROI( this.colorImage, this.rightHandRect );
 								// Copy Data
 								Cv.Copy( this.colorImage, this.rightHandImage );
@@ -451,17 +452,14 @@ namespace PainterKinect
 								// Smooth Color Hand Image
 								Cv.Smooth( this.rightHandImage, this.rightHandImage, SmoothType.Median );
 
+
 								// Filter With Depth Image
 								FilterFarObjects( this.rightHandImage, this.rightHandDepthImage );
 
 								// Detect By Skin Color Model
-								this.skinModel.FilterSkinRegion( this.rightHandImage, 0.4f );
-
-								// Smooth Color Hand Image
-								Cv.Smooth( this.rightHandImage, this.rightHandImage, SmoothType.Median );
-								// Erode & Dilate
-								Cv.Erode( this.rightHandImage, this.rightHandImage );
-								Cv.Dilate( this.rightHandImage, this.rightHandImage );
+								this.skinDetector.FilterSkinColorRegion( this.rightHandImage, this.rightHandSkinImage, 0.3f );
+								// Smooth Color Hand Skin Image
+								Cv.Smooth( this.rightHandSkinImage, this.rightHandSkinImage, SmoothType.Median );
 							}
 							else
 							{
@@ -470,12 +468,17 @@ namespace PainterKinect
 						}
 					}
 
+					// Show Depth Image
+					Cv.ShowImage( "Depth Image", this.depthImage );
+					Cv.ShowImage( "Left Hand Depth Image", this.leftHandDepthImage );
+					Cv.ShowImage( "Right Hand Depth Image", this.rightHandDepthImage );
+
 					// Show Color Image
 					Cv.ShowImage( "Color Image", this.colorImage );
-					//if ( this.leftHandImageMat != null )
-					Cv.ShowImage( "Left Hand Region Image", this.leftHandImage );
-					//if ( this.rightHandImageMat != null )
-					Cv.ShowImage( "RIght Hand Region Image", this.rightHandImage );
+					Cv.ShowImage( "Left Hand Image", this.leftHandImage );
+					Cv.ShowImage( "Right Hand Image", this.rightHandImage );
+					Cv.ShowImage( "Left Hand Skin Image", this.leftHandSkinImage );
+					Cv.ShowImage( "Right Hand Skin Image", this.rightHandSkinImage );
 				}
 			}
 		}
