@@ -45,6 +45,10 @@ namespace PainterKinect
 		private IplImage leftHandDepthImage;
 		private IplImage rightHandDepthImage;
 
+		// Object Only Image
+		private IplImage leftObjectOnlyImage;
+		private IplImage rightObjectOnlyImage;
+
 		// Hand Tracked State
 		private bool leftHandFound = false;
 		private bool rightHandFound = false;
@@ -138,6 +142,10 @@ namespace PainterKinect
 				this.leftHandDepthImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
 				this.rightHandDepthImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
 
+				// Allocate Object Image
+				this.leftObjectOnlyImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectOnlyImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+
 				// Set Tracking Mode
 				this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
 				// Enable Skeleton Stream
@@ -189,12 +197,19 @@ namespace PainterKinect
 			// Release IplImage Memory
 			Cv.ReleaseImage( this.colorImage );
 			Cv.ReleaseImage( this.depthImage );
+
+			// Hand Image
 			Cv.ReleaseImage( this.leftHandImage );
-			Cv.ReleaseImage( this.leftHandSkinImage );
-			Cv.ReleaseImage( this.leftHandDepthImage );
 			Cv.ReleaseImage( this.rightHandImage );
+			// Skin Image
+			Cv.ReleaseImage( this.leftHandSkinImage );
 			Cv.ReleaseImage( this.rightHandSkinImage );
+			// Hand Depth Image
+			Cv.ReleaseImage( this.leftHandDepthImage );
 			Cv.ReleaseImage( this.rightHandDepthImage );
+			// Object Image
+			Cv.ReleaseImage( this.leftObjectOnlyImage );
+			Cv.ReleaseImage( this.rightObjectOnlyImage );
 			// 
 		}
 
@@ -400,9 +415,6 @@ namespace PainterKinect
 
 								// Smooth Color Hand Image
 								Cv.Smooth( this.leftHandImage, this.leftHandImage, SmoothType.Median );
-								//Cv.Erode( this.leftHandImage, this.leftHandImage );
-								//Cv.Dilate( this.leftHandImage, this.leftHandImage );
-
 
 								// Filter With Depth Image
 								FilterFarObjects( this.leftHandImage, this.leftHandDepthImage );
@@ -451,7 +463,6 @@ namespace PainterKinect
 
 								// Smooth Color Hand Image
 								Cv.Smooth( this.rightHandImage, this.rightHandImage, SmoothType.Median );
-
 
 								// Filter With Depth Image
 								FilterFarObjects( this.rightHandImage, this.rightHandDepthImage );
