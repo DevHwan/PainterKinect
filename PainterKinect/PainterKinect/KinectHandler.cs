@@ -45,9 +45,22 @@ namespace PainterKinect
 		private IplImage leftHandDepthImage;
 		private IplImage rightHandDepthImage;
 
+		// Object Remained Image
+		private IplImage leftObjectRemainedImage;
+		private IplImage rightObjectRemainedImage;
+
 		// Object Only Image
-		private IplImage leftObjectOnlyImage;
-		private IplImage rightObjectOnlyImage;
+		private IplImage leftObjectImage;
+		private IplImage rightObjectImage;
+
+		// Objects Color Image
+		private IplImage leftObjectR;
+		private IplImage leftObjectG;
+		private IplImage leftObjectB;
+		private IplImage rightObjectR;
+		private IplImage rightObjectG;
+		private IplImage rightObjectB;
+		private IplImage tempObjectA;
 
 		// Hand Tracked State
 		private bool leftHandFound = false;
@@ -143,8 +156,21 @@ namespace PainterKinect
 				this.rightHandDepthImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
 
 				// Allocate Object Image
-				this.leftObjectOnlyImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.rightObjectOnlyImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.leftObjectRemainedImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectRemainedImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+
+				// Allocate Object Only Image
+				this.leftObjectImage = Cv.CreateImage( new CvSize( Configuration.OBJECT_REGION_WIDTH, Configuration.OBJECT_REGION_HEIGHT ), BitDepth.U8, 4 );
+				this.rightObjectImage = Cv.CreateImage( new CvSize( Configuration.OBJECT_REGION_WIDTH, Configuration.OBJECT_REGION_HEIGHT ), BitDepth.U8, 4 );
+
+				// RGB Image Datas
+				this.leftObjectR = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.leftObjectG = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.leftObjectB = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectR = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectG = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectB = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.tempObjectA = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
 
 				// Set Tracking Mode
 				this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
@@ -208,8 +234,8 @@ namespace PainterKinect
 			Cv.ReleaseImage( this.leftHandDepthImage );
 			Cv.ReleaseImage( this.rightHandDepthImage );
 			// Object Image
-			Cv.ReleaseImage( this.leftObjectOnlyImage );
-			Cv.ReleaseImage( this.rightObjectOnlyImage );
+			Cv.ReleaseImage( this.leftObjectRemainedImage );
+			Cv.ReleaseImage( this.rightObjectRemainedImage );
 			// 
 		}
 
@@ -245,11 +271,47 @@ namespace PainterKinect
 			}
 		}
 
+		private void CropNear( IplImage inputDepthImage )
+		{
+			int channel = inputDepthImage.NChannels;
+			int val;
+			int cnt = 0;
+			int max = 0;
+			int min = int.MaxValue;
+
+			// Find Mean Value
+			for ( int dy = 0 ; dy < inputDepthImage.Height ; dy++ )
+			{
+				for ( int dx = 0 ; dx < inputDepthImage.Width ; dx++ )
+				{
+					unsafe
+					{
+						val = inputDepthImage.ImageDataPtr[dy * inputDepthImage.WidthStep + channel * dx];
+						if ( val != 0 )
+						{
+							cnt++;
+
+							if ( max < val )
+								max = val;
+							if ( min > val )
+								min = val;
+						}
+
+					}
+				}
+			}
+
+			val = ( min + max ) / 2;
+
+			Cv.Threshold( inputDepthImage, inputDepthImage, val, 255.0, ThresholdType.ToZero );
+		}
+
 		private void OnAllFrameReady( object sender, AllFramesReadyEventArgs e )
 		{
 			if ( this.isShutDown )
 				return;
 
+			#region Skeleton Data Process Region
 			// 1. Process Skeleton Data
 			// Grab Skeleton Frame
 			using ( SkeletonFrame skeletonFrame = e.OpenSkeletonFrame() )
@@ -260,7 +322,9 @@ namespace PainterKinect
 					skeletonFrame.CopySkeletonDataTo( skeletons );
 				}
 			}
+			#endregion
 
+			#region Depth Data Process Region
 			// 2. Process Depth Data
 			// Grab Depth Frame
 			short depthValue;
@@ -343,7 +407,9 @@ namespace PainterKinect
 					}
 				}
 			}
+			#endregion
 
+			#region Color Data Process Region
 			// 3. Process Color Data
 			// Grab Color Frame
 			using ( ColorImageFrame colorFrame = e.OpenColorImageFrame() )
@@ -406,7 +472,7 @@ namespace PainterKinect
 
 								// Set Hand Position
 								leftHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-								Cv.Rectangle( this.colorImage, this.leftHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
+								Cv.Rectangle( this.colorImage, this.leftHandRect, new CvScalar( 0, 0, 255 ), 1 ); // Used for Visualization
 								Cv.SetImageROI( this.colorImage, this.leftHandRect );
 								// Copy Data
 								Cv.Copy( this.colorImage, this.leftHandImage );
@@ -416,13 +482,29 @@ namespace PainterKinect
 								// Smooth Color Hand Image
 								Cv.Smooth( this.leftHandImage, this.leftHandImage, SmoothType.Median );
 
+								// Only Hand Region
+								CropNear( this.leftHandDepthImage );
+
 								// Filter With Depth Image
 								FilterFarObjects( this.leftHandImage, this.leftHandDepthImage );
 
 								// Detect By Skin Color Model
-								this.skinDetector.FilterSkinColorRegion( this.leftHandImage, this.leftHandSkinImage, 0.3f );
+								this.skinDetector.FilterSkinColorRegion( this.leftHandImage, this.leftHandSkinImage, 0.25f );
 								// Smooth Color Hand Skin Image
-								Cv.Smooth( this.leftHandSkinImage, this.leftHandSkinImage, SmoothType.Median );
+								//Cv.Smooth( this.leftHandSkinImage, this.leftHandSkinImage, SmoothType.Median );
+								Cv.Smooth( this.leftHandSkinImage, this.leftHandSkinImage, SmoothType.Median, 5 );
+								Cv.Erode( this.leftHandSkinImage, this.leftHandSkinImage );
+								Cv.Dilate( this.leftHandSkinImage, this.leftHandSkinImage );
+								
+
+								// Find Object
+								Cv.Sub( this.leftHandDepthImage, this.leftHandSkinImage, this.leftObjectRemainedImage );
+								Cv.Erode( this.leftObjectRemainedImage, this.leftObjectRemainedImage );
+								Cv.Smooth( this.leftObjectRemainedImage, this.leftObjectRemainedImage, SmoothType.Median );
+
+								// Filter Objects Only
+								FilterFarObjects( this.leftHandImage, this.leftObjectRemainedImage );
+
 							}
 							else
 							{
@@ -454,7 +536,7 @@ namespace PainterKinect
 
 								// Set Hand Position
 								rightHandRect = new CvRect( topleft_x, topleft_y, Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT );
-								Cv.Rectangle( this.colorImage, this.rightHandRect, new CvScalar( 0, 0, 255 ), 5 ); // Used for Visualization
+								Cv.Rectangle( this.colorImage, this.rightHandRect, new CvScalar( 0, 0, 255 ), 1 ); // Used for Visualization
 								Cv.SetImageROI( this.colorImage, this.rightHandRect );
 								// Copy Data
 								Cv.Copy( this.colorImage, this.rightHandImage );
@@ -464,13 +546,27 @@ namespace PainterKinect
 								// Smooth Color Hand Image
 								Cv.Smooth( this.rightHandImage, this.rightHandImage, SmoothType.Median );
 
+								CropNear( this.rightHandDepthImage );
+
 								// Filter With Depth Image
 								FilterFarObjects( this.rightHandImage, this.rightHandDepthImage );
 
 								// Detect By Skin Color Model
-								this.skinDetector.FilterSkinColorRegion( this.rightHandImage, this.rightHandSkinImage, 0.3f );
+								this.skinDetector.FilterSkinColorRegion( this.rightHandImage, this.rightHandSkinImage, 0.25f );
 								// Smooth Color Hand Skin Image
-								Cv.Smooth( this.rightHandSkinImage, this.rightHandSkinImage, SmoothType.Median );
+								//Cv.Smooth( this.rightHandSkinImage, this.rightHandSkinImage, SmoothType.Median );
+								Cv.Smooth( this.rightHandSkinImage, this.rightHandSkinImage, SmoothType.Median, 5 );
+								Cv.Erode( this.rightHandSkinImage, this.rightHandSkinImage );
+								Cv.Dilate( this.rightHandSkinImage, this.rightHandSkinImage );
+
+								// Find Object
+								Cv.Sub( this.rightHandDepthImage, this.rightHandSkinImage, this.rightObjectRemainedImage );
+								Cv.Erode( this.rightObjectRemainedImage, this.rightObjectRemainedImage );
+								Cv.Smooth( this.rightObjectRemainedImage, this.rightObjectRemainedImage, SmoothType.Median );
+
+								// Filter Objects Only
+								FilterFarObjects( this.rightHandImage, this.rightObjectRemainedImage );
+
 							}
 							else
 							{
@@ -478,7 +574,9 @@ namespace PainterKinect
 							}
 						}
 					}
+			#endregion
 
+					#region Image Display Region
 					// Show Depth Image
 					Cv.ShowImage( "Depth Image", this.depthImage );
 					Cv.ShowImage( "Left Hand Depth Image", this.leftHandDepthImage );
@@ -490,6 +588,19 @@ namespace PainterKinect
 					Cv.ShowImage( "Right Hand Image", this.rightHandImage );
 					Cv.ShowImage( "Left Hand Skin Image", this.leftHandSkinImage );
 					Cv.ShowImage( "Right Hand Skin Image", this.rightHandSkinImage );
+
+					// Show Object Only Image
+					Cv.ShowImage( "Left Hand Object Image", this.leftObjectRemainedImage );
+					Cv.ShowImage( "Right Hand Object Image", this.rightObjectRemainedImage );
+
+
+					Cv.ShowImage( "Left B", this.leftObjectB );
+					Cv.ShowImage( "Left G", this.leftObjectG );
+					Cv.ShowImage( "Left R", this.leftObjectR );
+					Cv.ShowImage( "Right B", this.rightObjectB );
+					Cv.ShowImage( "Right G", this.rightObjectG );
+					Cv.ShowImage( "Right R", this.rightObjectR );
+					#endregion
 				}
 			}
 		}

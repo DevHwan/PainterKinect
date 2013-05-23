@@ -7,10 +7,13 @@ namespace PainterKinect
 {
 	public class Configuration
 	{
-		// Hand Region Width
+		// Hand Region Size
 		public static int HAND_REGION_WIDTH = 150;
-		// Hand Region Height
 		public static int HAND_REGION_HEIGHT = 150;
+
+		// Object Region Size
+		public static int OBJECT_REGION_WIDTH = 50;
+		public static int OBJECT_REGION_HEIGHT = 50;
 
 		// Screen Size
 		public static double  SCREEN_WIDTH = 800.0;
