@@ -53,14 +53,15 @@ namespace PainterKinect
 		private IplImage leftObjectImage;
 		private IplImage rightObjectImage;
 
-		// Objects Color Image
-		private IplImage leftObjectR;
-		private IplImage leftObjectG;
-		private IplImage leftObjectB;
-		private IplImage rightObjectR;
-		private IplImage rightObjectG;
-		private IplImage rightObjectB;
-		private IplImage tempObjectA;
+		// Object Color Image
+		private IplImage leftObjectHSVImage;
+		private IplImage leftObjectHImage;
+		private IplImage leftObjectSImage;
+		private IplImage leftObjectVImage;
+		private IplImage rightObjectHSVImage;
+		private IplImage rightObjectHImage;
+		private IplImage rightObjectSImage;
+		private IplImage rightObjectVImage;
 
 		// Hand Tracked State
 		private bool leftHandFound = false;
@@ -163,14 +164,15 @@ namespace PainterKinect
 				this.leftObjectImage = Cv.CreateImage( new CvSize( Configuration.OBJECT_REGION_WIDTH, Configuration.OBJECT_REGION_HEIGHT ), BitDepth.U8, 4 );
 				this.rightObjectImage = Cv.CreateImage( new CvSize( Configuration.OBJECT_REGION_WIDTH, Configuration.OBJECT_REGION_HEIGHT ), BitDepth.U8, 4 );
 
-				// RGB Image Datas
-				this.leftObjectR = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.leftObjectG = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.leftObjectB = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.rightObjectR = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.rightObjectG = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.rightObjectB = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
-				this.tempObjectA = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				// Allocate Object HSV Image
+				this.leftObjectHSVImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 3 );
+				this.leftObjectHImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.leftObjectSImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.leftObjectVImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectHSVImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 3 );
+				this.rightObjectHImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectSImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
+				this.rightObjectVImage = Cv.CreateImage( new CvSize( Configuration.HAND_REGION_WIDTH, Configuration.HAND_REGION_HEIGHT ), BitDepth.U8, 1 );
 
 				// Set Tracking Mode
 				this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
@@ -505,6 +507,9 @@ namespace PainterKinect
 								// Filter Objects Only
 								FilterFarObjects( this.leftHandImage, this.leftObjectRemainedImage );
 
+								Cv.CvtColor( this.leftHandImage, this.leftObjectHSVImage, ColorConversion.BgraToBgr );
+								Cv.CvtColor( this.leftObjectHSVImage, this.leftObjectHSVImage, ColorConversion.BgrToHsv );
+								Cv.Split( this.leftObjectHSVImage, this.leftObjectHImage, this.leftObjectSImage, this.leftObjectVImage, null );
 							}
 							else
 							{
@@ -567,6 +572,9 @@ namespace PainterKinect
 								// Filter Objects Only
 								FilterFarObjects( this.rightHandImage, this.rightObjectRemainedImage );
 
+								Cv.CvtColor( this.rightHandImage, this.rightObjectHSVImage, ColorConversion.BgraToBgr );
+								Cv.CvtColor( this.rightObjectHSVImage, this.rightObjectHSVImage, ColorConversion.BgrToHsv );
+								Cv.Split( this.rightObjectHSVImage, this.rightObjectHImage, this.rightObjectSImage, this.rightObjectVImage, null );
 							}
 							else
 							{
@@ -593,13 +601,15 @@ namespace PainterKinect
 					Cv.ShowImage( "Left Hand Object Image", this.leftObjectRemainedImage );
 					Cv.ShowImage( "Right Hand Object Image", this.rightObjectRemainedImage );
 
+					// Show Object HSV Image
+					Cv.ShowImage( "Left Hand H Image", this.leftObjectHImage );
+					Cv.ShowImage( "Left Hand S Image", this.leftObjectSImage );
+					Cv.ShowImage( "Left Hand V Image", this.leftObjectVImage );
+					Cv.ShowImage( "Right Hand H Image", this.rightObjectHImage );
+					Cv.ShowImage( "Right Hand S Image", this.rightObjectSImage );
+					Cv.ShowImage( "Right Hand V Image", this.rightObjectVImage );
 
-					Cv.ShowImage( "Left B", this.leftObjectB );
-					Cv.ShowImage( "Left G", this.leftObjectG );
-					Cv.ShowImage( "Left R", this.leftObjectR );
-					Cv.ShowImage( "Right B", this.rightObjectB );
-					Cv.ShowImage( "Right G", this.rightObjectG );
-					Cv.ShowImage( "Right R", this.rightObjectR );
+
 					#endregion
 				}
 			}
